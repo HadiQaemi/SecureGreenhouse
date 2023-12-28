@@ -1,0 +1,119 @@
+(* Channel Definition *)
+free PriCh : channel [private].
+free PubCh : channel.
+
+(* Private Parameters *)
+free ID_si : bitstring [private].
+free ID_dr : bitstring [private].
+free SK : bitstring [private].
+
+(* Public Parameters *)
+free ID_ed : bitstring.
+const a : bitstring.
+
+(* Functions *)
+fun XOR(bitstring, bitstring) : bitstring.
+fun MUL2(bitstring, bitstring) : bitstring.
+fun MUL3(bitstring, bitstring, bitstring) : bitstring.
+fun H1(bitstring) : bitstring.
+fun H2(bitstring, bitstring) : bitstring.
+fun H3(bitstring, bitstring, bitstring) : bitstring.
+fun H4(bitstring, bitstring, bitstring, bitstring) : bitstring.
+fun CP(bitstring, bitstring) : bitstring.
+fun SE(bitstring, bitstring): bitstring.
+fun CC(bitstring, bitstring): bitstring.
+
+(* Destructors *)
+reduc forall m1 : bitstring, m2 : bitstring; SD(SE(m1, m2), m2) = m1.
+reduc forall m1 : bitstring, m2 : bitstring; SF(CC(m1, m2)) = m1.
+reduc forall m1 : bitstring, m2 : bitstring; SS(CC(m1, m2)) = m2.
+
+(* Equations *)
+equation forall m1 : bitstring, m2 : bitstring, m3 : bitstring, m4 : bitstring, m5 : bitstring, m6 : bitstring, m7 : bitstring, m8 : bitstring, m9 : bitstring, m10 : bitstring, m11 : bitstring;
+CP(MUL3(m1, m2, MUL3(m3, m4, H3(MUL3(m3, m5, H2(m6, m7)), m8, m9))), CP(MUL2(m10, m11), a)) =
+CP(MUL3(m10, m11, H3(MUL3(m3, m5, H2(m6, m7)), m8, m9)), CP(MUL2(m1, m2), CP(MUL2(m3, m4), a))) [convergent].
+
+(* queries *)
+query attacker (SK).
+query attacker (ID_si).
+query ID : bitstring; inj-event (EndSession (ID)) ==> inj-event (InitiateSession (ID)).
+
+(* Events *)
+event InitiateSession (bitstring).
+event EndSession (bitstring).
+
+(* Sink Node *)
+let pSN=
+new r_si : bitstring;
+new T_si : bitstring;
+new pk_si : bitstring;
+in (PriCh, (PID_si : bitstring, PID_dr : bitstring, s_si : bitstring, X_ed : bitstring, K_si : bitstring));
+let R_si = CP(MUL2(pk_si, r_si), X_ed) in
+let H_si = H4(PID_si, PID_dr, R_si, T_si) in
+let E_si = SE(CC(H_si, R_si), K_si) in
+event InitiateSession(ID_si);
+out (PubCh, (PID_si, E_si, T_si));
+in (PubCh, (xE_dr : bitstring));
+let temp0 = SD(xE_dr, K_si) in
+let xH_dr = SF(temp0) in
+let xR_dr = SS(temp0) in
+let SK_si = H1(CP(MUL3(pk_si, r_si, s_si), xR_dr)) in
+out (PubCh, SE(SK, SK_si));
+let xxH_dr = H2(SK_si, T_si) in
+if (xH_dr = xxH_dr) then
+let ACK_si = H2(T_si, SK_si) in
+out (PubCh, (ACK_si));
+0.
+
+(* Drone *)
+let pD=
+new pk_dr : bitstring;
+new r_dr : bitstring;
+let PK_dr = CP(pk_dr, a) in
+out (PriCh, (PK_dr));
+in (PriCh, (PID_dr : bitstring, s_dr : bitstring, k_ed : bitstring, K_dr : bitstring, PK_ed : bitstring));
+in (PubCh, (xPID_si : bitstring, xE_si : bitstring, xT_si : bitstring));
+let K_si = H2(xPID_si, k_ed) in
+let temp0 = SD(xE_si, K_si) in
+let xH_si = SF(temp0) in
+let xR_si = SS(temp0) in
+let xxH_si = H4(xPID_si, PID_dr, xR_si, xT_si) in
+if (xH_si = xxH_si) then
+let R_dr = CP(MUL2(pk_dr, r_dr), a) in
+let SK_dr = H1(CP(MUL3(pk_dr, r_dr, H3(s_dr, ID_dr, xPID_si)), xR_si)) in
+out (PubCh, SE(SK, SK_dr));
+let H_dr = H2(SK_dr, xT_si) in
+let E_dr = SE(CC(H_dr, R_dr), K_si) in
+out (PubCh, (E_dr));
+in (PubCh, (xACK_si : bitstring));
+let xxACK_si = H2(xT_si, SK_dr) in
+if (xACK_si = xxACK_si) then
+event EndSession(ID_si);
+0.
+
+(* Edge Server *)
+let pES=
+new k_ed : bitstring;
+new l_ed : bitstring;
+new v_ed : bitstring;
+new w_ed : bitstring;
+new x_ed : bitstring;
+new pk_ed : bitstring;
+
+let PK_ed = CP(pk_ed, a) in
+in (PriCh, (PK_dr : bitstring));
+let K_dr = CP(MUL3(k_ed, ID_dr, pk_ed), a) in
+let PID_dr = XOR(ID_dr, l_ed) in
+let s_dr = MUL3(pk_ed, v_ed, H2(ID_ed, PID_dr)) in
+let V_ed = CP(MUL2(pk_ed, v_ed), PK_dr) in
+out (PriCh, (PID_dr, s_dr, k_ed, K_dr, PK_ed));
+
+let PID_si = XOR(ID_si, w_ed) in
+let s_si = MUL3(pk_ed, x_ed, H3(s_dr, ID_dr, PID_si)) in
+let X_ed = CP(MUL2(pk_ed, x_ed), a) in
+let K_si = H2(PID_si, k_ed) in
+out (PriCh, (PID_si, PID_dr, s_si, X_ed, K_si));
+0.
+
+process
+  ((!pD) | (!pSN) | (!pES))
